@@ -1,0 +1,45 @@
+# AI Compute Platform - 应用配置
+server:
+  port: 8080
+
+spring:
+  application:
+    name: acmp-compute
+  # H2 内存/文件数据库（demo 使用）
+  datasource:
+    url: jdbc:h2:file:./data/acmp;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;AUTO_SERVER=TRUE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema-h2.sql
+      data-locations: classpath:data-h2.sql
+
+# MyBatis
+mybatis:
+  mapper-locations: classpath:mapper/**/*.xml
+  type-aliases-package: com.acmp.compute.entity
+  type-handlers-package: com.acmp.compute.config
+  configuration:
+    map-underscore-to-camel-case: true
+
+# JWT（生产环境请用环境变量覆盖）
+jwt:
+  secret: ${JWT_SECRET:acmp-compute-jwt-secret-key-change-in-production}
+  expiration-ms: 86400000
+
+# AES 加密 kubeconfig（生产环境请用环境变量）
+encryption:
+  aes-key: ${AES_KEY:acmp32byteskey!!!!!!!!!!!!!!!!!}
+
+# 日志
+logging:
+  level:
+    com.acmp: INFO
+    org.springframework.security: INFO

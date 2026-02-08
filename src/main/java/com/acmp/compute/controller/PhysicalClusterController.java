@@ -1,0 +1,48 @@
+package com.acmp.compute.controller;
+
+import com.acmp.compute.dto.CapacityResponse;
+import com.acmp.compute.dto.PhysicalClusterRegisterRequest;
+import com.acmp.compute.dto.PhysicalClusterResponse;
+import com.acmp.compute.service.PhysicalClusterService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
+
+import javax.validation.Valid;
+import java.util.List;
+import java.util.Map;
+
+@RestController
+@RequestMapping("/api/v1/physical-clusters")
+@RequiredArgsConstructor
+public class PhysicalClusterController {
+
+    private final PhysicalClusterService physicalClusterService;
+
+    @PostMapping
+    @PreAuthorize("hasRole('PLATFORM_ADMIN')")
+    public ResponseEntity<PhysicalClusterResponse> register(@Valid @RequestBody PhysicalClusterRegisterRequest request) {
+        PhysicalClusterResponse resp = physicalClusterService.register(request.getName(), request.getKubeconfigBase64());
+        return ResponseEntity.status(HttpStatus.CREATED).body(resp);
+    }
+
+    @GetMapping
+    @PreAuthorize("hasRole('PLATFORM_ADMIN')")
+    public ResponseEntity<List<PhysicalClusterResponse>> list() {
+        return ResponseEntity.ok(physicalClusterService.list());
+    }
+
+    @GetMapping("/{id}/capacity")
+    public ResponseEntity<CapacityResponse> getCapacity(@PathVariable String id) {
+        return ResponseEntity.ok(physicalClusterService.getCapacity(id));
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('PLATFORM_ADMIN')")
+    public ResponseEntity<Map<String, String>> delete(@PathVariable String id) {
+        physicalClusterService.delete(id);
+        return ResponseEntity.ok(Map.of("message", "已删除"));
+    }
+}

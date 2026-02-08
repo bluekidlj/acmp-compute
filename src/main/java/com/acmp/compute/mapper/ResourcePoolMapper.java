@@ -1,0 +1,24 @@
+package com.acmp.compute.mapper;
+
+import com.acmp.compute.entity.ResourcePool;
+import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
+
+import java.util.List;
+import java.util.Optional;
+
+@Mapper
+public interface ResourcePoolMapper {
+
+    int insert(ResourcePool entity);
+
+    int update(ResourcePool entity);
+
+    Optional<ResourcePool> findById(@Param("id") String id);
+
+    List<ResourcePool> findAll();
+
+    List<ResourcePool> findByPhysicalClusterId(@Param("physicalClusterId") String physicalClusterId);
+
+    int deleteById(@Param("id") String id);
+}

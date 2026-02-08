@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.acmp.compute.mapper.ModelDeploymentMapper">
+
+    <resultMap id="BaseResultMap" type="com.acmp.compute.entity.ModelDeployment">
+        <id column="id" property="id"/>
+        <result column="resource_pool_id" property="resourcePoolId"/>
+        <result column="name" property="name"/>
+        <result column="model_name" property="modelName"/>
+        <result column="model_source" property="modelSource"/>
+        <result column="model_id_or_path" property="modelIdOrPath"/>
+        <result column="vllm_image" property="vllmImage"/>
+        <result column="gpu_per_replica" property="gpuPerReplica"/>
+        <result column="gpumem_mb" property="gpumemMb"/>
+        <result column="gpucores" property="gpucores"/>
+        <result column="replicas" property="replicas"/>
+        <result column="k8s_deployment_name" property="k8sDeploymentName"/>
+        <result column="k8s_service_name" property="k8sServiceName"/>
+        <result column="status" property="status"/>
+        <result column="service_url" property="serviceUrl"/>
+        <result column="created_by" property="createdBy"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <insert id="insert">
+        INSERT INTO model_deployment (id, resource_pool_id, name, model_name, model_source, model_id_or_path, vllm_image,
+            gpu_per_replica, gpumem_mb, gpucores, replicas, k8s_deployment_name, k8s_service_name, status, service_url, created_by, created_at, updated_at)
+        VALUES (#{id}, #{resourcePoolId}, #{name}, #{modelName}, #{modelSource}, #{modelIdOrPath}, #{vllmImage},
+            #{gpuPerReplica}, #{gpumemMb}, #{gpucores}, #{replicas}, #{k8sDeploymentName}, #{k8sServiceName}, #{status}, #{serviceUrl}, #{createdBy}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    </insert>
+
+    <update id="update">
+        UPDATE model_deployment
+        SET status = #{status}, service_url = #{serviceUrl}, updated_at = CURRENT_TIMESTAMP
+        WHERE id = #{id}
+    </update>
+
+    <select id="findById" resultMap="BaseResultMap">
+        SELECT * FROM model_deployment WHERE id = #{id}
+    </select>
+
+    <select id="findByResourcePoolId" resultMap="BaseResultMap">
+        SELECT * FROM model_deployment WHERE resource_pool_id = #{resourcePoolId} ORDER BY created_at DESC
+    </select>
+
+    <delete id="deleteById">
+        DELETE FROM model_deployment WHERE id = #{id}
+    </delete>
+</mapper>

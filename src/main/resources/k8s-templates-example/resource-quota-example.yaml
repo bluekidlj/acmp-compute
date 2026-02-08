@@ -1,0 +1,13 @@
+# 模板 resource-quota.yaml.ftl 的参考输出示例
+# 变量: namespace=pool-abc12345, gpuSlots=16, cpuCores=64, memoryGiB=512
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: pool-abc12345-quota
+  namespace: pool-abc12345
+spec:
+  hard:
+    cpu: "64"
+    memory: "512Gi"
+    nvidia.com/gpu: "16"
+    pods: "200"

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.acmp.compute.mapper.UserMapper">
+
+    <resultMap id="BaseResultMap" type="com.acmp.compute.entity.User">
+        <id column="id" property="id"/>
+        <result column="username" property="username"/>
+        <result column="password_hash" property="passwordHash"/>
+        <result column="role" property="role"/>
+        <result column="organization_id" property="organizationId"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <insert id="insert">
+        INSERT INTO user (id, username, password_hash, role, organization_id, created_at, updated_at)
+        VALUES (#{id}, #{username}, #{passwordHash}, #{role}, #{organizationId}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    </insert>
+
+    <update id="update">
+        UPDATE user SET username = #{username}, role = #{role}, organization_id = #{organizationId}, updated_at = CURRENT_TIMESTAMP
+        WHERE id = #{id}
+    </update>
+
+    <select id="findById" resultMap="BaseResultMap">
+        SELECT * FROM user WHERE id = #{id}
+    </select>
+
+    <select id="findByUsername" resultMap="BaseResultMap">
+        SELECT * FROM user WHERE username = #{username}
+    </select>
+
+    <select id="findResourcePoolIdsByUserId" resultType="java.lang.String">
+        SELECT resource_pool_id FROM user_resource_pool WHERE user_id = #{userId}
+    </select>
+
+    <insert id="insertUserResourcePool">
+        INSERT INTO user_resource_pool (user_id, resource_pool_id) VALUES (#{userId}, #{resourcePoolId})
+    </insert>
+
+    <delete id="deleteUserResourcePoolsByUserId">
+        DELETE FROM user_resource_pool WHERE user_id = #{userId}
+    </delete>
+</mapper>
