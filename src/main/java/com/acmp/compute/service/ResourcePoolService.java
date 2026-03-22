@@ -5,7 +5,7 @@ import com.acmp.compute.dto.ResourcePoolResponse;
 import com.acmp.compute.entity.ResourcePool;
 import com.acmp.compute.exception.ResourceNotFoundException;
 import com.acmp.compute.exception.ForbiddenException;
-import com.acmp.compute.k8s.K8sTemplateEngine;
+import com.acmp.compute.k8s.K8sResourceBuilder;
 import com.acmp.compute.k8s.KubernetesClientManager;
 import com.acmp.compute.mapper.PhysicalClusterMapper;
 import com.acmp.compute.mapper.ResourcePoolMapper;
@@ -17,13 +17,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
- * 逻辑资源池服务：创建时依次完成 Namespace → ResourceQuota → Volcano Queue → 落库。
+ * 逻辑资源池服务：创建时依次完成 Namespace → ResourceQuota → RBAC(SA/Role/RB) → Volcano Queue → 落库。
  * 所有用户通过平台代理操作，不 per-user 创建 K8s ServiceAccount。
+ * 使用 fabric8 Builder API 构建 K8s 资源，无需模板引擎。
  */
 @Slf4j
 @Service
@@ -33,11 +33,19 @@ public class ResourcePoolService {
     private final ResourcePoolMapper resourcePoolMapper;
     private final PhysicalClusterMapper physicalClusterMapper;
     private final KubernetesClientManager clientManager;
-    private final K8sTemplateEngine templateEngine;
 
     /**
-     * 创建逻辑资源池：严格按顺序完成以下步骤，保证 K8s 与 DB 一致。
-     * 1) 生成 namespace 与 queue 名 2) 创建 Namespace 3) 创建 ResourceQuota 4) 创建 Volcano Queue 5) 写入 DB。
+     * 创建逻辑资源池（部门级）：严格按顺序完成以下步骤，保证 K8s 与 DB 一致。
+     * 步骤：
+     * 1) 校验物理集群存在
+     * 2) 生成 namespace 与相关 K8s 资源名
+     * 3) 创建 Namespace
+     * 4) 创建 ResourceQuota（包含 maxPods 限制）
+     * 5) 创建 ServiceAccount
+     * 6) 创建 Role（部门级权限）
+     * 7) 创建 RoleBinding
+     * 8) 创建 Volcano Queue（集群级）
+     * 9) 写入 DB
      */
     @Transactional(rollbackFor = Exception.class)
     public ResourcePoolResponse create(ResourcePoolCreateRequest request) {
@@ -45,45 +53,66 @@ public class ResourcePoolService {
         if (physicalClusterMapper.findById(physicalClusterId).isEmpty()) {
             throw new ResourceNotFoundException("物理集群不存在: " + physicalClusterId);
         }
+        
+        // 生成资源名
         String shortId = UUID.randomUUID().toString().substring(0, 8);
-        String namespace = "pool-" + shortId;
-        String volcanoQueueName = "queue-" + shortId;
-
-        // 步骤 1：在物理集群下创建 Namespace，作为该逻辑池的隔离边界
+        String namespace = "dept-" + request.getDepartmentCode() + "-" + shortId;
+        String serviceAccountName = "sa-dept-" + request.getDepartmentCode();
+        String roleName = "role-dept-" + request.getDepartmentCode();
+        String roleBindingName = "rb-dept-" + request.getDepartmentCode();
+        String quotaName = "quota-dept-" + request.getDepartmentCode();
+        String volcanoQueueName = "queue-dept-" + request.getDepartmentCode();
+        
+        // 步骤 1：创建 Namespace
         clientManager.createNamespace(physicalClusterId, namespace);
-
-        // 步骤 2：创建 ResourceQuota，限制该 namespace 内 GPU/CPU/Memory 总量（与池容量一致）
-        String quotaYaml = templateEngine.render("resource-quota.yaml.ftl", Map.of(
-                "namespace", namespace,
-                "gpuSlots", request.getGpuSlots(),
-                "cpuCores", request.getCpuCores(),
-                "memoryGiB", request.getMemoryGiB()
-        ));
-        clientManager.applyYamlInNamespace(physicalClusterId, namespace, quotaYaml);
-
-        // 步骤 3：创建 Volcano Queue（集群级 CRD），用于批调度与队列配额
-        String queueYaml = templateEngine.render("volcano-queue.yaml.ftl", Map.of(
-                "queueName", volcanoQueueName,
-                "gpuSlots", request.getGpuSlots(),
-                "cpuCores", request.getCpuCores(),
-                "memoryGiB", request.getMemoryGiB()
-        ));
+        
+        // 步骤 2：创建 ResourceQuota（包含 pods 限制）
+        int maxPods = request.getMaxPods() != null ? request.getMaxPods() : 50;
+        clientManager.createResourceQuota(
+            physicalClusterId, namespace, quotaName,
+            request.getGpuSlots(), request.getCpuCores(), request.getMemoryGiB(), maxPods
+        );
+        
+        // 步骤 3：创建 ServiceAccount
+        clientManager.createServiceAccount(physicalClusterId, namespace, serviceAccountName);
+        
+        // 步骤 4：创建 Role（部门专属权限）
+        clientManager.createRole(physicalClusterId, namespace, roleName);
+        
+        // 步骤 5：创建 RoleBinding（绑定 SA 到 Role）
+        clientManager.createRoleBinding(physicalClusterId, namespace, roleBindingName, roleName, serviceAccountName);
+        
+        // 步骤 6：创建 Volcano Queue（集群级 CRD）
+        // 使用 Builder API 构建 Queue YAML（替代模板引擎）
+        String queueYaml = K8sResourceBuilder.buildVolcanoQueue(
+            volcanoQueueName,
+            String.valueOf(request.getGpuSlots()),
+            String.valueOf(request.getCpuCores()),
+            String.valueOf(request.getMemoryGiB())
+        );
         clientManager.applyClusterScopedYaml(physicalClusterId, queueYaml);
-
-        // 步骤 4：将逻辑资源池记录落库，供后续部署与任务使用
+        // 步骤 7：将逻辑资源池记录落库
         String id = UUID.randomUUID().toString();
         ResourcePool pool = ResourcePool.builder()
                 .id(id)
                 .physicalClusterId(physicalClusterId)
                 .name(request.getName())
+                .departmentCode(request.getDepartmentCode())
+                .departmentName(request.getDepartmentName())
                 .namespace(namespace)
+                .serviceAccountName(serviceAccountName)
                 .gpuSlots(request.getGpuSlots())
                 .cpuCores(request.getCpuCores())
                 .memoryGiB(request.getMemoryGiB())
+                .maxPods(maxPods)
                 .volcanoQueueName(volcanoQueueName)
                 .status("active")
                 .build();
         resourcePoolMapper.insert(pool);
+        
+        log.info("✓ 已成功创建部门资源池 {} (namespace: {}, dept: {})",
+                id, namespace, request.getDepartmentCode());
+        
         return toResponse(resourcePoolMapper.findById(id).orElseThrow());
     }
 
@@ -117,10 +146,14 @@ public class ResourcePoolService {
                 .id(p.getId())
                 .physicalClusterId(p.getPhysicalClusterId())
                 .name(p.getName())
+                .departmentCode(p.getDepartmentCode())
+                .departmentName(p.getDepartmentName())
                 .namespace(p.getNamespace())
+                .serviceAccountName(p.getServiceAccountName())
                 .gpuSlots(p.getGpuSlots())
                 .cpuCores(p.getCpuCores())
                 .memoryGiB(p.getMemoryGiB())
+                .maxPods(p.getMaxPods())
                 .volcanoQueueName(p.getVolcanoQueueName())
                 .status(p.getStatus())
                 .createdAt(p.getCreatedAt())

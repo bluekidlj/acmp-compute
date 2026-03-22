@@ -1,0 +1,21 @@
+# Maven 编译输出目录（核心）
+target/
+*/target/
+**/target/
+
+# IDEA 自动生成
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Eclipse 自动生成
+.classpath
+.project
+.settings/
+
+# 系统文件
+.DS_Store
+*.log
+*.tmp
+*.swp

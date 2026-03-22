@@ -10,6 +10,7 @@ import java.time.Instant;
 public class PhysicalClusterResponse {
     private String id;
     private String name;
+    private String description;
     private String status;
     private Integer totalGpuSlots;
     private Instant createdAt;

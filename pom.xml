@@ -9,7 +9,6 @@
         <artifactId>spring-boot-starter-parent</artifactId>
         <version>2.7.18</version>
         <relativePath/>
-        <scope>import</scope>
     </parent>
 
     <groupId>com.acmp</groupId>

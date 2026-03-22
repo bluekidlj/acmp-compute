@@ -5,6 +5,7 @@
     <resultMap id="BaseResultMap" type="com.acmp.compute.entity.PhysicalCluster">
         <id column="id" property="id"/>
         <result column="name" property="name"/>
+        <result column="description" property="description"/>
         <result column="kubeconfig_base64_encrypted" property="kubeconfigBase64Encrypted"/>
         <result column="status" property="status"/>
         <result column="total_gpu_slots" property="totalGpuSlots"/>
@@ -13,13 +14,13 @@
     </resultMap>
 
     <insert id="insert">
-        INSERT INTO physical_cluster (id, name, kubeconfig_base64_encrypted, status, total_gpu_slots, created_at, updated_at)
-        VALUES (#{id}, #{name}, #{kubeconfigBase64Encrypted}, #{status}, #{totalGpuSlots}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        INSERT INTO physical_cluster (id, name, description, kubeconfig_base64_encrypted, status, total_gpu_slots, created_at, updated_at)
+        VALUES (#{id}, #{name}, #{description}, #{kubeconfigBase64Encrypted}, #{status}, #{totalGpuSlots}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
     </insert>
 
     <update id="update">
         UPDATE physical_cluster
-        SET name = #{name}, kubeconfig_base64_encrypted = #{kubeconfigBase64Encrypted}, status = #{status},
+        SET name = #{name}, description = #{description}, kubeconfig_base64_encrypted = #{kubeconfigBase64Encrypted}, status = #{status},
             total_gpu_slots = #{totalGpuSlots}, updated_at = CURRENT_TIMESTAMP
         WHERE id = #{id}
     </update>

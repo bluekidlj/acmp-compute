@@ -4,6 +4,7 @@
 CREATE TABLE IF NOT EXISTS physical_cluster (
     id VARCHAR(36) PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
+    description VARCHAR(512),
     kubeconfig_base64_encrypted CLOB NOT NULL,
     status VARCHAR(32) NOT NULL DEFAULT 'active',
     total_gpu_slots INT,
@@ -19,15 +20,19 @@ CREATE TABLE IF NOT EXISTS organization (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 逻辑资源池（Namespace + ResourceQuota + Volcano Queue）
+-- 逻辑资源池（Namespace + ResourceQuota + RBAC + Volcano Queue）
 CREATE TABLE IF NOT EXISTS resource_pool (
     id VARCHAR(36) PRIMARY KEY,
     physical_cluster_id VARCHAR(36) NOT NULL,
     name VARCHAR(255) NOT NULL,
-    namespace VARCHAR(255) NOT NULL,
+    department_code VARCHAR(64) NOT NULL,
+    department_name VARCHAR(255),
+    namespace VARCHAR(255) NOT NULL UNIQUE,
+    service_account_name VARCHAR(255),
     gpu_slots INT NOT NULL,
     cpu_cores INT NOT NULL,
     memory_gib INT NOT NULL,
+    max_pods INT DEFAULT 50,
     volcano_queue_name VARCHAR(255) NOT NULL,
     status VARCHAR(32) NOT NULL DEFAULT 'active',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -93,3 +98,21 @@ CREATE TABLE IF NOT EXISTS training_job_record (
     FOREIGN KEY (resource_pool_id) REFERENCES resource_pool(id)
 );
 
+-- 资源池凭证（为部门用户发放的 K8s 访问凭证）
+CREATE TABLE IF NOT EXISTS resource_pool_credential (
+    id VARCHAR(36) PRIMARY KEY,
+    resource_pool_id VARCHAR(36) NOT NULL,
+    username VARCHAR(128) NOT NULL,
+    kubeconfig CLOB NOT NULL,
+    expire_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (resource_pool_id) REFERENCES resource_pool(id)
+);
+
+-- 索引：加速查询
+CREATE INDEX IF NOT EXISTS idx_resource_pool_dept ON resource_pool(department_code);
+CREATE INDEX IF NOT EXISTS idx_resource_pool_cluster ON resource_pool(physical_cluster_id);
+CREATE INDEX IF NOT EXISTS idx_credential_pool ON resource_pool_credential(resource_pool_id);
+CREATE INDEX IF NOT EXISTS idx_user_resource_pool_user ON user_resource_pool(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_resource_pool_pool ON user_resource_pool(resource_pool_id);

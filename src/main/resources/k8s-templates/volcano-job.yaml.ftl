@@ -16,6 +16,9 @@ spec:
     template:
       spec:
         restartPolicy: Never
+        # 强制将 Pod 调度到有 GPU 的节点
+        nodeSelector:
+          gpu-node: "true"
         containers:
         - name: worker
           image: ${image}

@@ -8,7 +8,15 @@ import io.fabric8.kubernetes.api.model.NamespaceBuilder;
 import io.fabric8.kubernetes.api.model.Quantity;
 import io.fabric8.kubernetes.api.model.ResourceQuota;
 import io.fabric8.kubernetes.api.model.ResourceQuotaBuilder;
+import io.fabric8.kubernetes.api.model.ServiceAccount;
+import io.fabric8.kubernetes.api.model.ServiceAccountBuilder;
 import io.fabric8.kubernetes.api.model.apps.Deployment;
+import io.fabric8.kubernetes.api.model.rbac.Role;
+import io.fabric8.kubernetes.api.model.rbac.RoleBinding;
+import io.fabric8.kubernetes.api.model.rbac.RoleBindingBuilder;
+import io.fabric8.kubernetes.api.model.rbac.RoleBuilder;
+import io.fabric8.kubernetes.api.model.rbac.PolicyRule;
+import io.fabric8.kubernetes.api.model.rbac.PolicyRuleBuilder;
 import io.fabric8.kubernetes.client.Config;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.KubernetesClientBuilder;
@@ -18,6 +26,8 @@ import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.Base64;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -76,11 +86,11 @@ public class KubernetesClientManager {
     }
 
     /**
-     * 在指定 namespace 下创建 ResourceQuota，限制 GPU/CPU/Memory。
+     * 在指定 namespace 下创建 ResourceQuota，限制 GPU/CPU/Memory/Pods。
      * 与逻辑资源池容量一致，便于池化隔离。
      */
     public void createResourceQuota(String physicalClusterId, String namespace, String quotaName,
-                                    int gpuSlots, int cpuCores, int memoryGiB) {
+                                    int gpuSlots, int cpuCores, int memoryGiB, int maxPods) {
         KubernetesClient client = getClient(physicalClusterId);
         ResourceQuota quota = new ResourceQuotaBuilder()
                 .withNewMetadata().withName(quotaName).withNamespace(namespace).endMetadata()
@@ -88,11 +98,12 @@ public class KubernetesClientManager {
                 .addToHard("nvidia.com/gpu", Quantity.parse(String.valueOf(gpuSlots)))
                 .addToHard("cpu", Quantity.parse(String.valueOf(cpuCores)))
                 .addToHard("memory", Quantity.parse(memoryGiB + "Gi"))
-                .addToHard("pods", Quantity.parse("200"))
+                .addToHard("pods", Quantity.parse(String.valueOf(maxPods)))
                 .endSpec()
                 .build();
         client.resourceQuotas().inNamespace(namespace).resource(quota).createOrReplace();
-        log.info("已创建 ResourceQuota: {} @ namespace {}", quotaName, namespace);
+        log.info("已创建 ResourceQuota: {} @ namespace {} (gpu={}, cpu={}, mem={}Gi, pods={})", 
+                quotaName, namespace, gpuSlots, cpuCores, memoryGiB, maxPods);
     }
 
     /**
@@ -170,5 +181,141 @@ public class KubernetesClientManager {
             log.warn("kubeconfig 校验失败: {}", e.getMessage());
             return false;
         }
+    }
+
+    /**
+     * 创建 ServiceAccount：用于部门用户访问对应 namespace 的凭证生成。
+     * ServiceAccount 绑定到 Role，通过 RoleBinding 实现权限隔离。
+     */
+    public void createServiceAccount(String physicalClusterId, String namespace, String saName) {
+        KubernetesClient client = getClient(physicalClusterId);
+        ServiceAccount sa = new ServiceAccountBuilder()
+                .withNewMetadata()
+                .withName(saName)
+                .withNamespace(namespace)
+                .endMetadata()
+                .build();
+        client.serviceAccounts().inNamespace(namespace).resource(sa).createOrReplace();
+        log.info("已创建 ServiceAccount: {} @ namespace {}", saName, namespace);
+    }
+
+    /**
+     * 创建 Role：为部门用户定义权限范围，支持 Pod、Deployment、Service、VolcanoJob 等操作。
+     * 该 Role 限制在特定 namespace 内。
+     */
+    public void createRole(String physicalClusterId, String namespace, String roleName) {
+        KubernetesClient client = getClient(physicalClusterId);
+        
+        // Pod 相关权限
+        PolicyRule podRule = new PolicyRuleBuilder()
+                .withApiGroups("")
+                .withResources("pods", "pods/log", "pods/exec")
+                .withVerbs("get", "list", "watch", "create", "delete")
+                .build();
+        
+        // Deployment 相关权限
+        PolicyRule deploymentRule = new PolicyRuleBuilder()
+                .withApiGroups("apps")
+                .withResources("deployments", "statefulsets")
+                .withVerbs("get", "list", "watch", "create", "update", "patch", "delete")
+                .build();
+        
+        // Job 相关权限
+        PolicyRule jobRule = new PolicyRuleBuilder()
+                .withApiGroups("batch")
+                .withResources("jobs")
+                .withVerbs("get", "list", "watch", "create", "update", "patch", "delete")
+                .build();
+        
+        // VolcanoJob 权限
+        PolicyRule volcanoJobRule = new PolicyRuleBuilder()
+                .withApiGroups("batch.volcano.sh")
+                .withResources("volcanojobs")
+                .withVerbs("get", "list", "watch", "create", "update", "patch", "delete")
+                .build();
+        
+        // Service、ConfigMap、Secret 权限
+        PolicyRule svcRule = new PolicyRuleBuilder()
+                .withApiGroups("")
+                .withResources("services", "configmaps", "secrets")
+                .withVerbs("get", "list", "watch", "create", "update", "patch", "delete")
+                .build();
+        
+        // Event 权限（用于监控）
+        PolicyRule eventRule = new PolicyRuleBuilder()
+                .withApiGroups("")
+                .withResources("events")
+                .withVerbs("get", "list", "watch")
+                .build();
+        
+        // PersistentVolumeClaim 权限（用于数据持久化）
+        PolicyRule pvcRule = new PolicyRuleBuilder()
+                .withApiGroups("")
+                .withResources("persistentvolumeclaims")
+                .withVerbs("get", "list", "watch", "create", "delete")
+                .build();
+        
+        Role role = new RoleBuilder()
+                .withNewMetadata()
+                .withName(roleName)
+                .withNamespace(namespace)
+                .endMetadata()
+                .withRules(podRule, deploymentRule, jobRule, volcanoJobRule, svcRule, eventRule, pvcRule)
+                .build();
+        
+        client.rbac().roles().inNamespace(namespace).resource(role).createOrReplace();
+        log.info("已创建 Role: {} @ namespace {}", roleName, namespace);
+    }
+
+    /**
+     * 创建 RoleBinding：将 Role 与 ServiceAccount 绑定，赋予 SA 对应的权限。
+     */
+    public void createRoleBinding(String physicalClusterId, String namespace, String rbName, 
+                                  String roleName, String saName) {
+        KubernetesClient client = getClient(physicalClusterId);
+        RoleBinding rb = new RoleBindingBuilder()
+                .withNewMetadata()
+                .withName(rbName)
+                .withNamespace(namespace)
+                .endMetadata()
+                .withRoleRef("rbac.authorization.k8s.io", "Role", roleName)
+                .withSubjects(
+                    new io.fabric8.kubernetes.api.model.rbac.Subject(
+                        "",  // api version
+                        null,  // field ref
+                        "ServiceAccount",
+                        saName,
+                        namespace
+                    )
+                )
+                .build();
+        
+        client.rbac().roleBindings().inNamespace(namespace).resource(rb).createOrReplace();
+        log.info("已创建 RoleBinding: {} @ namespace {}", rbName, namespace);
+    }
+
+    /**
+     * 从 ServiceAccount 的 Secret 中提取 token 和 CA 数据，用于生成 kubeconfig。
+     * 返回 Map<token, ca-crt>。
+     */
+    public Map<String, String> extractServiceAccountCredentials(String physicalClusterId, String namespace, String saName) {
+        KubernetesClient client = getClient(physicalClusterId);
+        ServiceAccount sa = client.serviceAccounts().inNamespace(namespace).withName(saName).get();
+        
+        if (sa == null || sa.getSecrets() == null || sa.getSecrets().isEmpty()) {
+            throw new RuntimeException("ServiceAccount " + saName + " 无关联 Secret");
+        }
+        
+        String secretName = sa.getSecrets().get(0).getName();
+        var secret = client.secrets().inNamespace(namespace).withName(secretName).get();
+        
+        if (secret == null || secret.getData() == null) {
+            throw new RuntimeException("无法获取 ServiceAccount Secret 数据");
+        }
+        
+        String token = new String(Base64.getDecoder().decode(secret.getData().get("token")));
+        String caCrt = secret.getData().get("ca.crt");
+        
+        return Map.of("token", token, "ca-crt", caCrt);
     }
 }
