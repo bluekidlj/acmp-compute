@@ -29,19 +29,19 @@ public class JwtTokenProvider {
         Date now = new Date();
         Date expiry = new Date(now.getTime() + expirationMs);
         return Jwts.builder()
-                .subject(userId)
+                .setSubject(userId)
                 .claim("username", username)
                 .claim("role", role)
                 .claim("organizationId", "")
                 .claim("resourcePoolIds", resourcePoolIds != null ? resourcePoolIds : List.of())
-                .issuedAt(now)
-                .expiration(expiry)
+                .setIssuedAt(now)
+                .setExpiration(expiry)
                 .signWith(key)
                 .compact();
     }
 
     public Claims parseToken(String token) {
-        return Jwts.parser().verifyWith(key).build().parseSignedClaims(token).getPayload();
+        return Jwts.parser().setSigningKey(key).parseClaimsJws(token).getBody();
     }
 
     public long getExpirationMs() {

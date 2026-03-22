@@ -15,6 +15,10 @@ import io.fabric8.kubernetes.api.model.rbac.Role;
 import io.fabric8.kubernetes.api.model.rbac.RoleBinding;
 import io.fabric8.kubernetes.api.model.rbac.RoleBindingBuilder;
 import io.fabric8.kubernetes.api.model.rbac.RoleBuilder;
+import io.fabric8.kubernetes.api.model.rbac.RoleRef;
+import io.fabric8.kubernetes.api.model.rbac.RoleRefBuilder;
+import io.fabric8.kubernetes.api.model.rbac.Subject;
+import io.fabric8.kubernetes.api.model.rbac.SubjectBuilder;
 import io.fabric8.kubernetes.api.model.rbac.PolicyRule;
 import io.fabric8.kubernetes.api.model.rbac.PolicyRuleBuilder;
 import io.fabric8.kubernetes.client.Config;
@@ -273,21 +277,28 @@ public class KubernetesClientManager {
     public void createRoleBinding(String physicalClusterId, String namespace, String rbName, 
                                   String roleName, String saName) {
         KubernetesClient client = getClient(physicalClusterId);
+        
+        // 使用 Builder 模式正确创建 RoleRef
+        io.fabric8.kubernetes.api.model.rbac.RoleRef roleRef = new RoleRefBuilder()
+                .withApiGroup("rbac.authorization.k8s.io")
+                .withKind("Role")
+                .withName(roleName)
+                .build();
+        
+        // 使用 Builder 模式正确创建 Subject
+        io.fabric8.kubernetes.api.model.rbac.Subject subject = new SubjectBuilder()
+                .withKind("ServiceAccount")
+                .withName(saName)
+                .withNamespace(namespace)
+                .build();
+        
         RoleBinding rb = new RoleBindingBuilder()
                 .withNewMetadata()
                 .withName(rbName)
                 .withNamespace(namespace)
                 .endMetadata()
-                .withRoleRef("rbac.authorization.k8s.io", "Role", roleName)
-                .withSubjects(
-                    new io.fabric8.kubernetes.api.model.rbac.Subject(
-                        "",  // api version
-                        null,  // field ref
-                        "ServiceAccount",
-                        saName,
-                        namespace
-                    )
-                )
+                .withRoleRef(roleRef)
+                .withSubjects(subject)
                 .build();
         
         client.rbac().roleBindings().inNamespace(namespace).resource(rb).createOrReplace();

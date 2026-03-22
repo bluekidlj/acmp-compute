@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
 
 /**
  * 物理集群服务：注册、列表、容量查询、删除。
@@ -74,7 +75,7 @@ public class PhysicalClusterService {
     }
 
     public List<PhysicalClusterResponse> list() {
-        return physicalClusterMapper.findAll().stream().map(this::toResponse).toList();
+        return physicalClusterMapper.findAll().stream().map(this::toResponse).collect(Collectors.toList());
     }
 
     /**
