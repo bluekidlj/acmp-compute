@@ -15,7 +15,6 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * JWT 认证过滤器：从 Authorization: Bearer <token> 解析用户并设置 SecurityContext。

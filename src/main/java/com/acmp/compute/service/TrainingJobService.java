@@ -13,8 +13,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
-import java.util.stream.Collectors;
-
 /**
  * 训练任务服务：提交 VolcanoJob 到逻辑资源池。
  * 使用 fabric8 Builder API 构建 VolcanoJob，获得类型安全和编译时检查的好处。

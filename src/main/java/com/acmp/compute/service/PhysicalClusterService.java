@@ -82,7 +82,6 @@ public class PhysicalClusterService {
      * 实时汇总集群容量：遍历节点 allocatable 中的 nvidia.com/gpu、cpu、memory。
      */
     public CapacityResponse getCapacity(String id) {
-        PhysicalCluster cluster = physicalClusterMapper.findById(id).orElseThrow(() -> new ResourceNotFoundException("集群不存在: " + id));
         KubernetesClient client = clientManager.getClient(id);
         AtomicLong gpuTotal = new AtomicLong(0);
         AtomicLong cpuTotal = new AtomicLong(0);

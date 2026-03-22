@@ -95,8 +95,6 @@ public class AdminResourcePoolService {
         // 简化版实现：返回一个包含必要信息的 kubeconfig 字符串
         // 生产环境建议使用 YAML 库（如 SnakeYAML）来正确解析和生成 YAML
         
-        // Base64 编码的 token 和 CA
-        String encodedToken = Base64.getEncoder().encodeToString(token.getBytes());
         String encodedCa = caCrt != null ? caCrt : Base64.getEncoder().encodeToString("".getBytes());
         
         // 这是一个简化的示例，实际应该从原始 kubeconfig 中提取集群地址等

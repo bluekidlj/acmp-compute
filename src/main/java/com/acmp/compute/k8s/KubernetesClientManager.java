@@ -15,9 +15,7 @@ import io.fabric8.kubernetes.api.model.rbac.Role;
 import io.fabric8.kubernetes.api.model.rbac.RoleBinding;
 import io.fabric8.kubernetes.api.model.rbac.RoleBindingBuilder;
 import io.fabric8.kubernetes.api.model.rbac.RoleBuilder;
-import io.fabric8.kubernetes.api.model.rbac.RoleRef;
 import io.fabric8.kubernetes.api.model.rbac.RoleRefBuilder;
-import io.fabric8.kubernetes.api.model.rbac.Subject;
 import io.fabric8.kubernetes.api.model.rbac.SubjectBuilder;
 import io.fabric8.kubernetes.api.model.rbac.PolicyRule;
 import io.fabric8.kubernetes.api.model.rbac.PolicyRuleBuilder;
@@ -31,7 +29,6 @@ import org.springframework.stereotype.Service;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -114,7 +111,6 @@ public class KubernetesClientManager {
      * 使用渲染后的 YAML 在指定 namespace 创建或替换资源（如 Deployment、Service）。
      * 用于 vLLM Deployment、VolcanoJob 等。
      */
-    @SuppressWarnings("rawtypes")
     public void applyYamlInNamespace(String physicalClusterId, String namespace, String yaml) {
         KubernetesClient client = getClient(physicalClusterId);
         try {
